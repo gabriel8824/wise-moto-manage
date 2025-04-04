@@ -1,178 +1,143 @@
 
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './AuthContext';
-import { Cooperative, CooperativeContextType, CooperativeRole, PlanLimits } from '../types';
-import { useToast } from "@/components/ui/use-toast";
-import { supabase } from "@/integrations/supabase/client";
+import type { Cooperative, User } from '@/types';
 
-const CooperativeContext = createContext<CooperativeContextType | undefined>(undefined);
+type CooperativeRole = 'administrador' | 'gerente' | 'funcionario';
 
-export const CooperativeProvider = ({ children }: { children: ReactNode }) => {
-  const [currentCooperative, setCurrentCooperative] = useState<Cooperative | null>(null);
+type CooperativeContextType = {
+  cooperatives: Cooperative[];
+  currentCooperative: Cooperative | null;
+  setCurrentCooperative: (cooperative: Cooperative) => void;
+  loading: boolean;
+  userRole: CooperativeRole | null;
+  isAdmin: boolean;
+};
+
+const CooperativeContext = createContext<CooperativeContextType>({
+  cooperatives: [],
+  currentCooperative: null,
+  setCurrentCooperative: () => {},
+  loading: true,
+  userRole: null,
+  isAdmin: false,
+});
+
+export const useCooperative = () => useContext(CooperativeContext);
+
+export const CooperativeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [cooperatives, setCooperatives] = useState<Cooperative[]>([]);
-  const [userRole, setUserRole] = useState<CooperativeRole | null>(null);
-  const [planLimits, setPlanLimits] = useState<PlanLimits | null>(null);
+  const [currentCooperative, setCurrentCooperative] = useState<Cooperative | null>(null);
   const [loading, setLoading] = useState(true);
+  const [userRole, setUserRole] = useState<CooperativeRole | null>(null);
   const { user } = useAuth();
-  const { toast } = useToast();
+  const navigate = useNavigate();
   
-  const fetchCooperatives = async () => {
-    if (!user) {
-      setCooperatives([]);
-      setCurrentCooperative(null);
-      setLoading(false);
-      return;
-    }
-    
-    try {
-      // Fetch cooperatives the user is a member of
-      const { data: userCooperatives, error: userCooperativesError } = await supabase
-        .from('cooperative_users')
-        .select('cooperative_id, role')
-        .eq('user_id', user.id);
-      
-      if (userCooperativesError) throw userCooperativesError;
-      
-      if (!userCooperatives || userCooperatives.length === 0) {
+  // Fetch cooperatives associated with the user
+  useEffect(() => {
+    const fetchCooperatives = async () => {
+      if (!user) {
         setCooperatives([]);
         setCurrentCooperative(null);
         setLoading(false);
         return;
       }
       
-      // Get the actual cooperative details
-      const { data: cooperativesData, error: cooperativesError } = await supabase
-        .from('cooperatives')
-        .select('*')
-        .in('id', userCooperatives.map(uc => uc.cooperative_id));
-      
-      if (cooperativesError) throw cooperativesError;
-      
-      if (!cooperativesData) {
-        setCooperatives([]);
-        return;
-      }
-      
-      const cooperativesList = cooperativesData.map(coop => ({
-        id: coop.id,
-        name: coop.name,
-        phone: coop.phone,
-        address: coop.address,
-        logo: coop.logo || undefined,
-        plan: coop.plan,
-        created_at: coop.created_at
-      }));
-      
-      setCooperatives(cooperativesList);
-      
-      // Check if there's a stored cooperative
-      const storedCooperative = localStorage.getItem('currentCooperative');
-      if (storedCooperative) {
-        const parsedCooperative = JSON.parse(storedCooperative);
-        const foundCooperative = cooperativesList.find(c => c.id === parsedCooperative.id);
+      try {
+        const { data, error } = await supabase
+          .from('cooperative_users')
+          .select(`
+            cooperative:cooperatives (
+              id, name, phone, address, logo, plan, 
+              plan_started_at, billing_method, billing_day, 
+              billing_period, motoboy_rate, client_rate,
+              whatsapp_key, whatsapp_number, whatsapp_endpoint,
+              automatic_payment_confirmation, created_at, updated_at
+            ),
+            role
+          `)
+          .eq('user_id', user.id);
+          
+        if (error) throw error;
         
-        if (foundCooperative) {
-          setCurrentCooperative(foundCooperative);
+        if (data && data.length > 0) {
+          const userCooperatives = data.map(item => item.cooperative) as Cooperative[];
+          setCooperatives(userCooperatives);
           
-          // Set user role in cooperative
-          const userCooperative = userCooperatives.find(uc => uc.cooperative_id === foundCooperative.id);
-          if (userCooperative) {
-            setUserRole(userCooperative.role as CooperativeRole);
+          // Try to load saved cooperative from localStorage
+          const savedCooperativeId = localStorage.getItem('currentCooperativeId');
+          if (savedCooperativeId) {
+            const saved = userCooperatives.find(coop => coop.id === savedCooperativeId);
+            if (saved) {
+              setCurrentCooperative(saved);
+              // Get the user role for this cooperative
+              const userCoopData = data.find(item => item.cooperative.id === saved.id);
+              if (userCoopData) {
+                setUserRole(userCoopData.role as CooperativeRole);
+              }
+            }
           }
-          
-          // Fetch plan limits
-          await fetchPlanLimits(foundCooperative.id);
         }
+      } catch (error) {
+        console.error('Error fetching cooperatives:', error);
+      } finally {
+        setLoading(false);
       }
-    } catch (error) {
-      console.error('Error fetching cooperatives:', error);
-      toast({
-        title: "Erro ao carregar cooperativas",
-        description: "Ocorreu um problema ao buscar suas cooperativas.",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-  
-  const fetchPlanLimits = async (cooperativeId: string) => {
-    try {
-      // Call the Supabase function to get cooperative plan limits
-      const { data, error } = await supabase.rpc(
-        'get_cooperative_plan_limits',
-        { cooperative_id: cooperativeId }
-      );
-      
-      if (error) {
-        throw error;
-      }
-      
-      setPlanLimits(data as PlanLimits);
-    } catch (error) {
-      console.error('Error fetching plan limits:', error);
-      toast({
-        title: "Erro ao carregar limites do plano",
-        description: "Não foi possível obter informações sobre o plano da cooperativa.",
-        variant: "destructive",
-      });
-    }
-  };
-  
-  const handleSetCurrentCooperative = async (cooperative: Cooperative) => {
-    setCurrentCooperative(cooperative);
-    localStorage.setItem('currentCooperative', JSON.stringify(cooperative));
+    };
     
-    if (user) {
-      // Get user role in the cooperative
-      const { data: userCooperative, error } = await supabase
-        .from('cooperative_users')
-        .select('role')
-        .eq('cooperative_id', cooperative.id)
-        .eq('user_id', user.id)
-        .single();
-      
-      if (userCooperative) {
-        setUserRole(userCooperative.role as CooperativeRole);
-      } else {
-        setUserRole(null);
-      }
-      
-      // Fetch plan limits
-      await fetchPlanLimits(cooperative.id);
-    }
-  };
-  
-  useEffect(() => {
     fetchCooperatives();
   }, [user]);
   
-  const refreshCooperatives = async () => {
-    setLoading(true);
-    await fetchCooperatives();
-  };
+  // Update localStorage when currentCooperative changes
+  useEffect(() => {
+    if (currentCooperative) {
+      localStorage.setItem('currentCooperativeId', currentCooperative.id);
+      
+      // Get the user role for this cooperative
+      const getUserRole = async () => {
+        if (!user) return;
+        
+        try {
+          const { data, error } = await supabase
+            .from('cooperative_users')
+            .select('role')
+            .eq('user_id', user.id)
+            .eq('cooperative_id', currentCooperative.id)
+            .single();
+            
+          if (error) throw error;
+          
+          if (data) {
+            setUserRole(data.role as CooperativeRole);
+          }
+        } catch (error) {
+          console.error('Error fetching user role:', error);
+        }
+      };
+      
+      getUserRole();
+    } else {
+      localStorage.removeItem('currentCooperativeId');
+      setUserRole(null);
+    }
+  }, [currentCooperative, user]);
+  
+  const isAdmin = userRole === 'administrador';
   
   return (
-    <CooperativeContext.Provider 
-      value={{ 
-        currentCooperative, 
-        cooperatives, 
-        userRole, 
-        planLimits, 
+    <CooperativeContext.Provider
+      value={{
+        cooperatives,
+        currentCooperative,
+        setCurrentCooperative,
         loading,
-        setCurrentCooperative: handleSetCurrentCooperative,
-        refreshCooperatives
+        userRole,
+        isAdmin,
       }}
     >
       {children}
     </CooperativeContext.Provider>
   );
-};
-
-export const useCooperative = () => {
-  const context = useContext(CooperativeContext);
-  if (context === undefined) {
-    throw new Error('useCooperative must be used within a CooperativeProvider');
-  }
-  return context;
 };
