@@ -34,9 +34,8 @@ export const PlanLimitsCard = ({ planLimits }: PlanLimitsCardProps) => {
             </span>
           </div>
           <Progress 
-            className="h-2 mt-1" 
+            className={`h-2 mt-1 ${getProgressColor(calculatePercentage(planLimits.motoboys.used, planLimits.motoboys.total))}`}
             value={calculatePercentage(planLimits.motoboys.used, planLimits.motoboys.total)} 
-            indicatorClassName={getProgressColor(calculatePercentage(planLimits.motoboys.used, planLimits.motoboys.total))}
           />
         </div>
         
@@ -48,9 +47,8 @@ export const PlanLimitsCard = ({ planLimits }: PlanLimitsCardProps) => {
             </span>
           </div>
           <Progress 
-            className="h-2 mt-1" 
+            className={`h-2 mt-1 ${getProgressColor(calculatePercentage(planLimits.clients.used, planLimits.clients.total))}`}
             value={calculatePercentage(planLimits.clients.used, planLimits.clients.total)}
-            indicatorClassName={getProgressColor(calculatePercentage(planLimits.clients.used, planLimits.clients.total))}
           />
         </div>
         
@@ -62,9 +60,8 @@ export const PlanLimitsCard = ({ planLimits }: PlanLimitsCardProps) => {
             </span>
           </div>
           <Progress 
-            className="h-2 mt-1" 
+            className={`h-2 mt-1 ${getProgressColor(calculatePercentage(planLimits.schedules.used, planLimits.schedules.total))}`}
             value={calculatePercentage(planLimits.schedules.used, planLimits.schedules.total)}
-            indicatorClassName={getProgressColor(calculatePercentage(planLimits.schedules.used, planLimits.schedules.total))}
           />
         </div>
       </CardContent>

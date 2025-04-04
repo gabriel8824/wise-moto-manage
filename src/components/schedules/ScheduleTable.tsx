@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { 
   Table, 
@@ -46,31 +45,43 @@ const getStatusTranslation = (status: ScheduleStatus): string => {
   return translations[status];
 };
 
-const getStatusBadgeVariant = (status: ScheduleStatus) => {
+type BadgeVariantInfo = {
+  variant: "outline" | "default" | "secondary" | "destructive";
+  className?: string;
+};
+
+const getStatusBadgeVariant = (status: ScheduleStatus): BadgeVariantInfo => {
   switch (status) {
     case 'pending':
-      return 'outline';
+      return {
+        variant: 'outline',
+        className: ''
+      };
     case 'confirmed':
       return {
         variant: 'outline',
-        className: 'border-amber-500 text-amber-500',
+        className: 'border-amber-500 text-amber-500'
       };
     case 'completed':
       return {
         variant: 'outline',
-        className: 'border-green-500 text-green-500',
+        className: 'border-green-500 text-green-500'
       };
     case 'cancelled':
       return {
         variant: 'outline',
-        className: 'border-destructive text-destructive',
+        className: 'border-destructive text-destructive'
       };
     default:
-      return 'outline';
+      return {
+        variant: 'outline',
+        className: ''
+      };
   }
 };
 
 export const ScheduleTable = ({ schedules }: ScheduleTableProps) => {
+  // ... keep existing code (searchQuery state and filtering functionality)
   const [searchQuery, setSearchQuery] = useState("");
   
   // This would be properly joined with user data in a real implementation
@@ -152,7 +163,7 @@ export const ScheduleTable = ({ schedules }: ScheduleTableProps) => {
                     <TableCell>{schedule.clientName}</TableCell>
                     <TableCell>
                       <Badge
-                        variant={statusBadge.variant as any}
+                        variant={statusBadge.variant}
                         className={statusBadge.className}
                       >
                         {getStatusTranslation(schedule.status)}

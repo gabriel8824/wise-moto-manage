@@ -33,7 +33,7 @@ export const CooperativeProvider = ({ children }: { children: ReactNode }) => {
       
       if (userCooperativesError) throw userCooperativesError;
       
-      if (userCooperatives.length === 0) {
+      if (!userCooperatives || userCooperatives.length === 0) {
         setCooperatives([]);
         setCurrentCooperative(null);
         setLoading(false);
@@ -47,6 +47,11 @@ export const CooperativeProvider = ({ children }: { children: ReactNode }) => {
         .in('id', userCooperatives.map(uc => uc.cooperative_id));
       
       if (cooperativesError) throw cooperativesError;
+      
+      if (!cooperativesData) {
+        setCooperatives([]);
+        return;
+      }
       
       const cooperativesList = cooperativesData.map(coop => ({
         id: coop.id,
