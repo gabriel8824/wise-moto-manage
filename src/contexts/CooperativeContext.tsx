@@ -14,6 +14,7 @@ type CooperativeContextType = {
   loading: boolean;
   userRole: CooperativeRole | null;
   isAdmin: boolean;
+  refreshCooperatives: () => Promise<void>;
 };
 
 const CooperativeContext = createContext<CooperativeContextType>({
@@ -23,6 +24,7 @@ const CooperativeContext = createContext<CooperativeContextType>({
   loading: true,
   userRole: null,
   isAdmin: false,
+  refreshCooperatives: async () => {},
 });
 
 export const useCooperative = () => useContext(CooperativeContext);
@@ -35,58 +37,65 @@ export const CooperativeProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const { user } = useAuth();
   const navigate = useNavigate();
   
-  // Fetch cooperatives associated with the user
-  useEffect(() => {
-    const fetchCooperatives = async () => {
-      if (!user) {
-        setCooperatives([]);
-        setCurrentCooperative(null);
-        setLoading(false);
-        return;
-      }
-      
-      try {
-        const { data, error } = await supabase
-          .from('cooperative_users')
-          .select(`
-            cooperative:cooperatives (
-              id, name, phone, address, logo, plan, 
-              plan_started_at, billing_method, billing_day, 
-              billing_period, motoboy_rate, client_rate,
-              whatsapp_key, whatsapp_number, whatsapp_endpoint,
-              automatic_payment_confirmation, created_at, updated_at
-            ),
-            role
-          `)
-          .eq('user_id', user.id);
-          
-        if (error) throw error;
+  // Function to fetch cooperatives associated with the user
+  const fetchCooperatives = async () => {
+    if (!user) {
+      setCooperatives([]);
+      setCurrentCooperative(null);
+      setLoading(false);
+      return;
+    }
+    
+    try {
+      const { data, error } = await supabase
+        .from('cooperative_users')
+        .select(`
+          cooperative:cooperatives (
+            id, name, phone, address, logo, plan, 
+            plan_started_at, plan_expires_at, billing_method, billing_day, 
+            billing_period, motoboy_rate, client_rate,
+            whatsapp_key, whatsapp_number, whatsapp_endpoint,
+            automatic_payment_confirmation, created_at, updated_at
+          ),
+          role
+        `)
+        .eq('user_id', user.id);
         
-        if (data && data.length > 0) {
-          const userCooperatives = data.map(item => item.cooperative) as Cooperative[];
-          setCooperatives(userCooperatives);
-          
-          // Try to load saved cooperative from localStorage
-          const savedCooperativeId = localStorage.getItem('currentCooperativeId');
-          if (savedCooperativeId) {
-            const saved = userCooperatives.find(coop => coop.id === savedCooperativeId);
-            if (saved) {
-              setCurrentCooperative(saved);
-              // Get the user role for this cooperative
-              const userCoopData = data.find(item => item.cooperative.id === saved.id);
-              if (userCoopData) {
-                setUserRole(userCoopData.role as CooperativeRole);
-              }
+      if (error) throw error;
+      
+      if (data && data.length > 0) {
+        const userCooperatives = data.map(item => item.cooperative as Cooperative);
+        setCooperatives(userCooperatives);
+        
+        // Try to load saved cooperative from localStorage
+        const savedCooperativeId = localStorage.getItem('currentCooperativeId');
+        if (savedCooperativeId) {
+          const saved = userCooperatives.find(coop => coop.id === savedCooperativeId);
+          if (saved) {
+            setCurrentCooperative(saved);
+            // Get the user role for this cooperative
+            const userCoopData = data.find(item => item.cooperative.id === saved.id);
+            if (userCoopData) {
+              setUserRole(userCoopData.role as CooperativeRole);
             }
           }
         }
-      } catch (error) {
-        console.error('Error fetching cooperatives:', error);
-      } finally {
-        setLoading(false);
       }
-    };
-    
+    } catch (error) {
+      console.error('Error fetching cooperatives:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  // Expose the refresh function to be called from other components
+  const refreshCooperatives = async () => {
+    setLoading(true);
+    await fetchCooperatives();
+  };
+  
+  // Fetch cooperatives associated with the user
+  useEffect(() => {
     fetchCooperatives();
   }, [user]);
   
@@ -135,6 +144,7 @@ export const CooperativeProvider: React.FC<{ children: React.ReactNode }> = ({ c
         loading,
         userRole,
         isAdmin,
+        refreshCooperatives,
       }}
     >
       {children}

@@ -82,21 +82,21 @@ const Dashboard = () => {
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <StatsCard 
           title="Escalas" 
-          value={recentSchedules.length} 
+          value={recentSchedules.length.toString()} 
           description="escalas para hoje"
-          icon={<CalendarDays className="h-8 w-8" />} 
+          icon={CalendarDays} 
         />
         <StatsCard 
           title="Motoboys" 
-          value={motoboysCount} 
+          value={motoboysCount.toString()} 
           description="motoboys ativos"
-          icon={<Users className="h-8 w-8" />} 
+          icon={Users} 
         />
         <StatsCard 
           title="Clientes" 
-          value={clientsCount} 
+          value={clientsCount.toString()} 
           description="clientes cadastrados"
-          icon={<Building2 className="h-8 w-8" />} 
+          icon={Building2} 
         />
       </div>
       

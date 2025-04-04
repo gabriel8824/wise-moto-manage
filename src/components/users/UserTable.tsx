@@ -32,7 +32,9 @@ interface UserTableProps {
 }
 
 // Helper function to get role translation
-const getRoleTranslation = (role: UserRole): string => {
+const getRoleTranslation = (role?: UserRole): string => {
+  if (!role) return 'Usuário';
+  
   const translations = {
     admin: "Administrador",
     super_admin: "Super Admin",

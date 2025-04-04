@@ -1,8 +1,17 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { User, AuthContextType } from '../types';
+import { User } from '../types';
 import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Session } from '@supabase/supabase-js';
+
+export interface AuthContextType {
+  user: User | null;
+  session: Session | null;
+  loading: boolean;
+  login: (email: string, password: string) => Promise<void>;
+  register: (email: string, password: string, name: string) => Promise<void>;
+  logout: () => Promise<void>;
+}
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -171,7 +180,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
   
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, session, loading, login, register, logout }}>
       {children}
     </AuthContext.Provider>
   );
