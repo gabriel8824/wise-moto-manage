@@ -2,22 +2,78 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { User, AuthContextType } from '../types';
 import { useToast } from "@/components/ui/use-toast";
+import { supabase } from "@/integrations/supabase/client";
+import { Session } from '@supabase/supabase-js';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
   
-  // Mock authentication for now - will connect to Supabase later
   useEffect(() => {
+    // Set up auth state listener first
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        setSession(session);
+        
+        if (session?.user) {
+          // Get the profile data with user role
+          const { data: profileData, error } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', session.user.id)
+            .single();
+            
+          if (profileData) {
+            setUser({
+              id: session.user.id,
+              email: session.user.email || '',
+              name: profileData.name,
+              role: profileData.role,
+              profile_image: profileData.profile_image,
+              created_at: profileData.created_at
+            });
+          } else {
+            console.error('Profile fetch error:', error);
+            setUser(null);
+          }
+        } else {
+          setUser(null);
+        }
+      }
+    );
+
+    // Then check for existing session
     const checkUser = async () => {
       try {
-        // Here we would check if the user is authenticated with Supabase
-        const storedUser = localStorage.getItem('coopeWiseUser');
-        if (storedUser) {
-          setUser(JSON.parse(storedUser));
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (session) {
+          setSession(session);
+          
+          // Get the profile data
+          const { data: profileData, error } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', session.user.id)
+            .single();
+            
+          if (profileData) {
+            setUser({
+              id: session.user.id,
+              email: session.user.email || '',
+              name: profileData.name,
+              role: profileData.role,
+              profile_image: profileData.profile_image,
+              created_at: profileData.created_at
+            });
+          } else {
+            console.error('Profile fetch error:', error);
+            setUser(null);
+          }
         }
       } catch (error) {
         console.error('Error checking authentication:', error);
@@ -27,32 +83,31 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     };
     
     checkUser();
+    
+    return () => {
+      subscription?.unsubscribe();
+    };
   }, []);
   
   const login = async (email: string, password: string) => {
     setLoading(true);
     try {
-      // Here we would authenticate with Supabase
-      // For now, we'll mock a successful login
-      const mockUser: User = {
-        id: '1',
+      const { error } = await supabase.auth.signInWithPassword({
         email,
-        name: 'User Example',
-        role: 'admin',
-        created_at: new Date().toISOString(),
-      };
+        password
+      });
       
-      setUser(mockUser);
-      localStorage.setItem('coopeWiseUser', JSON.stringify(mockUser));
+      if (error) throw error;
+      
       toast({
         title: "Login realizado com sucesso",
         description: "Bem-vindo de volta!",
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error during login:', error);
       toast({
         title: "Erro ao realizar login",
-        description: "Verifique suas credenciais e tente novamente.",
+        description: error.message || "Verifique suas credenciais e tente novamente.",
         variant: "destructive",
       });
       throw error;
@@ -64,27 +119,27 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const register = async (email: string, password: string, name: string) => {
     setLoading(true);
     try {
-      // Here we would register with Supabase
-      // For now, we'll mock a successful registration
-      const mockUser: User = {
-        id: '1',
+      const { error } = await supabase.auth.signUp({
         email,
-        name,
-        role: 'admin',
-        created_at: new Date().toISOString(),
-      };
+        password,
+        options: {
+          data: {
+            name
+          }
+        }
+      });
       
-      setUser(mockUser);
-      localStorage.setItem('coopeWiseUser', JSON.stringify(mockUser));
+      if (error) throw error;
+      
       toast({
         title: "Cadastro realizado com sucesso",
         description: "Bem-vindo ao CoopeWise!",
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error during registration:', error);
       toast({
         title: "Erro ao realizar cadastro",
-        description: "Verifique suas informações e tente novamente.",
+        description: error.message || "Verifique suas informações e tente novamente.",
         variant: "destructive",
       });
       throw error;
@@ -95,19 +150,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   
   const logout = async () => {
     try {
-      // Here we would sign out with Supabase
+      const { error } = await supabase.auth.signOut();
+      
+      if (error) throw error;
+      
       setUser(null);
-      localStorage.removeItem('coopeWiseUser');
       localStorage.removeItem('currentCooperative');
       toast({
         title: "Logout realizado com sucesso",
         description: "Até logo!",
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error during logout:', error);
       toast({
         title: "Erro ao realizar logout",
-        description: "Por favor, tente novamente.",
+        description: error.message || "Por favor, tente novamente.",
         variant: "destructive",
       });
       throw error;
